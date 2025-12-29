@@ -3,140 +3,302 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scanner Pro Direct</title>
+    <title>Scanner Pro - SPA</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <!-- OpenCV.js (Asynchronous Loading) -->
+    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
     <style>
-        /* Eliminamos cualquier control nativo del navegador */
-        video::-webkit-media-controls { display: none !important; }
-        video::-webkit-media-controls-start-playlist-button { display: none !important; }
-        video::-webkit-media-controls-enclosure { display: none !important; }
-        
-        video {
-            width: 100%;
-            height: 100vh;
-            object-fit: cover;
+        body {
+            background-color: #000;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        #video-container {
             position: fixed;
             top: 0;
             left: 0;
-            z-index: 1;
-            background: black;
-        }
-
-        .ui-layer {
-            position: fixed;
-            z-index: 10;
-            bottom: 40px;
             width: 100%;
+            height: 100%;
             display: flex;
-            justify-content: center;
-            pointer-events: none;
-        }
-
-        #snap {
-            pointer-events: auto;
-            width: 80px;
-            height: 80px;
-            background: white;
-            border: 6px solid rgba(59, 130, 246, 0.5);
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-
-        #preview {
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            background: black;
-            display: none;
-            flex-direction: column;
             align-items: center;
-            padding: 20px;
+            justify-content: center;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .capture-btn {
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+            transition: all 0.2s ease;
+        }
+        .capture-btn:active {
+            transform: scale(0.9);
+            box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.5);
+        }
+        #preview-overlay {
+            display: none;
+            background: rgba(0,0,0,0.9);
+            z-index: 50;
+        }
+        .loader {
+            border-top-color: #3498db;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
         }
     </style>
 </head>
-<body class="bg-black">
+<body class="text-white">
 
-    <video id="video" autoplay muted playsinline webkit-playsinline></video>
-
-    <div class="ui-layer">
-        <button id="snap"></button>
+    <!-- Pantalla de Carga de OpenCV -->
+    <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 z-[100] transition-opacity duration-500">
+        <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
+        <h2 class="text-xl font-semibold">Iniciando Scanner Pro</h2>
+        <p class="text-gray-400 mt-2">Cargando módulos de IA...</p>
     </div>
 
-    <div id="preview">
-        <canvas id="canvasOut" class="max-w-full h-auto rounded-lg shadow-2xl mt-10"></canvas>
-        <div class="flex gap-4 mt-auto mb-10 w-full max-w-sm">
-            <button onclick="location.reload()" class="flex-1 bg-zinc-800 text-white p-5 rounded-2xl font-bold">REPETIR</button>
-            <button id="save" class="flex-1 bg-blue-600 text-white p-5 rounded-2xl font-bold">DESCARGAR PDF</button>
+    <!-- Visor de Cámara -->
+    <div id="video-container">
+        <video id="video" autoplay playsinline></video>
+        <!-- Overlay de Guía -->
+        <div class="absolute inset-0 border-[40px] border-black/20 pointer-events-none flex items-center justify-center">
+             <div class="w-full h-full border-2 border-white/30 rounded-lg"></div>
         </div>
     </div>
 
+    <!-- Interfaz de Control -->
+    <div class="fixed bottom-0 left-0 w-full p-8 flex justify-center items-center z-40">
+        <button id="capture-btn" class="capture-btn w-20 h-20 bg-white rounded-full flex items-center justify-center">
+            <div class="w-16 h-16 border-4 border-black/10 rounded-full"></div>
+        </button>
+    </div>
+
+    <!-- Vista Previa del Documento Procesado -->
+    <div id="preview-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-4">
+        <h3 class="text-xl font-bold mb-4">Documento Escaneado</h3>
+        <div id="canvas-wrapper" class="w-full flex justify-center mb-6">
+            <!-- El canvas resultante se insertará aquí -->
+        </div>
+        <div class="flex gap-4 w-full max-w-sm">
+            <button id="retake-btn" class="flex-1 py-3 bg-gray-700 rounded-xl font-semibold">Repetir</button>
+            <button id="download-btn" class="flex-1 py-3 bg-blue-600 rounded-xl font-semibold flex items-center justify-center gap-2">
+                <span>Descargar PDF</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Mensajes de Estado -->
+    <div id="toast" class="fixed top-8 left-1/2 -translate-x-1/2 px-6 py-2 bg-black/60 backdrop-blur rounded-full text-sm opacity-0 transition-opacity">
+        Buscando documento...
+    </div>
+
+    <!-- Canvases invisibles para procesamiento -->
+    <canvas id="hidden-canvas" style="display:none;"></canvas>
+
     <script>
         const video = document.getElementById('video');
-        const snapBtn = document.getElementById('snap');
-        const preview = document.getElementById('preview');
-        const canvasOut = document.getElementById('canvasOut');
+        const captureBtn = document.getElementById('capture-btn');
+        const previewOverlay = document.getElementById('preview-overlay');
+        const retakeBtn = document.getElementById('retake-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const canvasWrapper = document.getElementById('canvas-wrapper');
+        const hiddenCanvas = document.getElementById('hidden-canvas');
+        const loadingScreen = document.getElementById('loading-screen');
+        
+        let processedCanvas = null;
 
-        // Función para arrancar la cámara
-        async function startCamera() {
+        // 1. Inicializar Cámara
+        async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
-                        facingMode: "environment",
+                        facingMode: 'environment',
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
                     },
                     audio: false
                 });
-                
                 video.srcObject = stream;
-
-                // Intentar reproducir automáticamente
-                video.play().catch(err => {
-                    console.log("Esperando interacción para reproducir");
-                    // Si falla el auto-play, forzamos con un click en cualquier parte
-                    document.body.addEventListener('click', () => video.play(), { once: true });
-                });
-
             } catch (err) {
-                alert("Error de cámara: " + err.message);
+                console.error("Error al acceder a la cámara:", err);
+                alert("No se pudo acceder a la cámara. Por favor, asegúrate de dar los permisos necesarios.");
             }
         }
 
-        // Capturar y procesar con OpenCV
-        snapBtn.onclick = () => {
-            if (typeof cv === 'undefined') return alert("Cargando motor de imagen...");
+        // 2. OpenCV Listo
+        function onOpenCvReady() {
+            console.log('OpenCV.js está listo.');
+            loadingScreen.style.opacity = '0';
+            setTimeout(() => loadingScreen.style.display = 'none', 500);
+            initCamera();
+        }
 
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0);
+        // 3. Captura y Procesamiento
+        captureBtn.addEventListener('click', () => {
+            processImage();
+        });
 
-            let src = cv.imread(canvas);
+        function processImage() {
+            // Dibujar frame actual en canvas oculto
+            const width = video.videoWidth;
+            const height = video.videoHeight;
+            hiddenCanvas.width = width;
+            hiddenCanvas.height = height;
+            const ctx = hiddenCanvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, width, height);
+
+            // Leer desde OpenCV
+            let src = cv.imread(hiddenCanvas);
             let dst = new cv.Mat();
             
-            // Filtro de "Escaner" profesional
-            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
-            cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 15, 12);
-            
-            cv.imshow('canvasOut', dst);
-            preview.style.display = 'flex';
-            
-            src.delete(); dst.delete();
-        };
+            // --- PASO 1: Preprocesamiento ---
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+            cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+            cv.Canny(dst, dst, 75, 200, 3, false);
 
-        // Guardar PDF
-        document.getElementById('save').onclick = () => {
+            // --- PASO 2: Detección de Contornos ---
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+            // Encontrar el contorno más grande que parezca un papel
+            let maxArea = 0;
+            let maxContourIndex = -1;
+            for (let i = 0; i < contours.size(); ++i) {
+                let cnt = contours.get(i);
+                let area = cv.contourArea(cnt);
+                let peri = cv.arcLength(cnt, true);
+                let approx = new cv.Mat();
+                cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+
+                if (approx.rows == 4 && area > maxArea) {
+                    maxArea = area;
+                    maxContourIndex = i;
+                }
+                approx.delete();
+            }
+
+            let finalImg = new cv.Mat();
+
+            if (maxContourIndex !== -1) {
+                // Si encontramos un rectángulo (papel)
+                let cnt = contours.get(maxContourIndex);
+                let peri = cv.arcLength(cnt, true);
+                let approx = new cv.Mat();
+                cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+
+                // Transformación de Perspectiva (Warp)
+                finalImg = applyWarp(src, approx);
+                approx.delete();
+            } else {
+                // Si no se detecta nada claro, usar toda la imagen
+                finalImg = src.clone();
+            }
+
+            // --- PASO 3: Filtro de Escaneo (Limpieza) ---
+            cv.cvtColor(finalImg, finalImg, cv.COLOR_RGBA2GRAY, 0);
+            cv.adaptiveThreshold(finalImg, finalImg, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 10);
+
+            // Mostrar resultado
+            if (processedCanvas) canvasWrapper.removeChild(processedCanvas);
+            processedCanvas = document.createElement('canvas');
+            cv.imshow(processedCanvas, finalImg);
+            canvasWrapper.appendChild(processedCanvas);
+            
+            previewOverlay.style.display = 'flex';
+
+            // Limpieza de memoria OpenCV
+            src.delete(); dst.delete(); contours.delete(); hierarchy.delete(); finalImg.delete();
+        }
+
+        // Función para ordenar puntos y aplicar warp
+        function applyWarp(src, pts) {
+            let width = src.cols;
+            let height = src.rows;
+
+            // Extraer coordenadas de approxPolyDP
+            let points = [];
+            for (let i = 0; i < 4; i++) {
+                points.push({ x: pts.data32S[i * 2], y: pts.data32S[i * 2 + 1] });
+            }
+
+            // Ordenar: Top-Left, Top-Right, Bottom-Right, Bottom-Left
+            points.sort((a, b) => a.y - b.y);
+            let topList = points.slice(0, 2).sort((a, b) => a.x - b.x);
+            let bottomList = points.slice(2, 4).sort((a, b) => a.x - b.x);
+            
+            let srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                topList[0].x, topList[0].y,
+                topList[1].x, topList[1].y,
+                bottomList[1].x, bottomList[1].y,
+                bottomList[0].x, bottomList[0].y
+            ]);
+
+            // Determinar dimensiones del nuevo documento
+            const w1 = Math.hypot(topList[1].x - topList[0].x, topList[1].y - topList[0].y);
+            const w2 = Math.hypot(bottomList[1].x - bottomList[0].x, bottomList[1].y - bottomList[0].y);
+            const maxWidth = Math.max(w1, w2);
+
+            const h1 = Math.hypot(topList[0].x - bottomList[0].x, topList[0].y - bottomList[0].y);
+            const h2 = Math.hypot(topList[1].x - bottomList[1].x, topList[1].y - bottomList[1].y);
+            const maxHeight = Math.max(h1, h2);
+
+            let dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                0, 0,
+                maxWidth - 1, 0,
+                maxWidth - 1, maxHeight - 1,
+                0, maxHeight - 1
+            ]);
+
+            let M = cv.getPerspectiveTransform(srcCoords, dstCoords);
+            let dsize = new cv.Size(maxWidth, maxHeight);
+            let result = new cv.Mat();
+            cv.warpPerspective(src, result, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+            srcCoords.delete(); dstCoords.delete(); M.delete();
+            return result;
+        }
+
+        // 4. Generación de PDF
+        downloadBtn.addEventListener('click', () => {
+            if (!processedCanvas) return;
+
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const imgData = canvasOut.toDataURL('image/jpeg', 0.8);
-            doc.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-            doc.save("documento_escaneado.pdf");
-        };
+            const imgData = processedCanvas.toDataURL('image/jpeg', 0.8);
+            
+            // Orientación según dimensiones
+            const orientation = processedCanvas.width > processedCanvas.height ? 'l' : 'p';
+            const pdf = new jsPDF(orientation, 'px', [processedCanvas.width, processedCanvas.height]);
+            
+            pdf.addImage(imgData, 'JPEG', 0, 0, processedCanvas.width, processedCanvas.height);
+            pdf.save(`escaneo_${new Date().getTime()}.pdf`);
+            
+            showToast("¡PDF Descargado!");
+        });
 
-        window.onload = startCamera;
+        retakeBtn.addEventListener('click', () => {
+            previewOverlay.style.display = 'none';
+        });
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.opacity = '1';
+            setTimeout(() => toast.style.opacity = '0', 2000);
+        }
+
     </script>
 </body>
 </html>
