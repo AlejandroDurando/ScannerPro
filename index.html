@@ -3,30 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mi Escáner Web</title>
+    <title>Escáner Pro</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app-container">
         <h2>Escáner de Documentos</h2>
-        
-        <div id="error-log" style="color: red; background: #ffe6e6; padding: 10px; display: none; margin-bottom: 10px; border-radius: 5px; font-size: 14px;"></div>
+        <p>Usa la cámara nativa para mejor enfoque y calidad.</p>
 
-        <div class="video-wrapper">
-            <video id="preview" autoplay playsinline muted></video>
-            <div class="focus-guide"></div>
-        </div>
+        <label class="custom-file-upload">
+            <input type="file" id="cameraInput" accept="image/*" capture="environment">
+            📸 Tomar Foto de Documento
+        </label>
 
-        <div class="controls">
-            <button id="start-camera-btn" style="background-color: #28a745; margin-bottom: 10px; display: none;">Inicias Cámara Manualmente</button>
-            <button id="capture-btn">Escanear Documento</button>
-        </div>
-
-        <canvas id="canvas" style="display: none;"></canvas>
-        
-        <div class="result-container">
-            <h3>Vista Previa:</h3>
-            <img id="output" src="" alt="Aquí aparecerá el escaneo">
+        <div class="result-container" id="resultContainer" style="display: none;">
+            <h3>Documento Escaneado:</h3>
+            <img id="output" src="" alt="Tu documento">
         </div>
     </div>
     <script src="script.js"></script>

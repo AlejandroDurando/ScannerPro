@@ -1,63 +1,38 @@
 body {
   font-family: sans-serif;
-  margin: 0;
-  background-color: #f0f2f5;
-  display: flex;
-  justify-content: center;
-}
-
-.app-container {
-  width: 100%;
-  max-width: 500px;
-  padding: 20px;
+  background-color: #f4f4f4;
   text-align: center;
+  padding: 20px;
 }
 
-.video-wrapper {
-  position: relative;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #000;
-  line-height: 0;
+/* Escondemos el input feo y creamos un botón bonito */
+input[type="file"] {
+  display: none;
 }
 
-/* Agrega o modifica esto */
-#preview {
-  width: 100%;
-  min-height: 250px; /* Altura mínima forzada */
-  background-color: #000; /* Fondo negro */
-  display: block;
-  object-fit: cover; /* Para que no se deforme la imagen */
-}
-
-/* Guía visual para centrar el documento */
-.focus-guide {
-  position: absolute;
-  top: 10%; left: 10%; right: 10%; bottom: 10%;
-  border: 2px dashed rgba(255, 255, 255, 0.5);
-  pointer-events: none;
-}
-
-.controls {
-  margin: 20px 0;
-}
-
-button {
-  padding: 15px 25px;
-  font-size: 16px;
-  border: none;
-  border-radius: 8px;
+.custom-file-upload {
+  display: inline-block;
+  padding: 15px 30px;
   cursor: pointer;
   background-color: #007bff;
   color: white;
+  border-radius: 50px;
+  font-size: 18px;
   font-weight: bold;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  margin-top: 20px;
+}
+
+.custom-file-upload:active {
+  background-color: #0056b3;
+  transform: scale(0.98);
 }
 
 #output {
-  width: 100%;
-  border-radius: 8px;
-  /* Filtro de escáner: Blanco y Negro puro */
-  filter: grayscale(1) contrast(2.5) brightness(1.1);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-  background: white;
+  max-width: 100%;
+  margin-top: 20px;
+  border: 1px solid #ccc;
+  /* Filtro para que parezca escáner (alto contraste) */
+  filter: grayscale(100%) contrast(150%); 
+  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
 }

@@ -1,64 +1,18 @@
-const video = document.getElementById('preview');
-const canvas = document.getElementById('canvas');
+const cameraInput = document.getElementById('cameraInput');
 const output = document.getElementById('output');
-const captureBtn = document.getElementById('capture-btn');
-const startBtn = document.getElementById('start-camera-btn');
-const errorLog = document.getElementById('error-log');
+const resultContainer = document.getElementById('resultContainer');
 
-// Función para mostrar errores en la pantalla del móvil
-function logError(msg) {
-    errorLog.style.display = 'block';
-    errorLog.innerHTML += `<p>${msg}</p>`;
-    console.error(msg);
-}
-
-async function initCamera() {
-    try {
-        // Pedimos permiso
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: "environment",
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            }, 
-            audio: false 
-        });
-
-        video.srcObject = stream;
+cameraInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Crear una URL temporal para ver la imagen
+        const imageUrl = URL.createObjectURL(file);
+        output.src = imageUrl;
+        resultContainer.style.display = 'block';
         
-        // Intentamos reproducir
-        try {
-            await video.play();
-        } catch (playError) {
-            logError("Autoplay bloqueado. Pulsa el botón verde.");
-            startBtn.style.display = 'inline-block'; // Mostramos botón manual
+        // Opcional: Liberar memoria cuando la imagen cargue
+        output.onload = () => {
+            URL.revokeObjectURL(output.src);
         }
-
-    } catch (err) {
-        logError("Error de acceso: " + err.message + "<br>Revisa los permisos del navegador.");
-        startBtn.style.display = 'inline-block';
     }
-}
-
-// Botón de respaldo para iniciar cámara manualmente (iOS a veces lo requiere)
-startBtn.addEventListener('click', async () => {
-    startBtn.style.display = 'none';
-    errorLog.style.display = 'none'; // Limpiar errores previos
-    errorLog.innerHTML = '';
-    await initCamera();
 });
-
-captureBtn.addEventListener('click', () => {
-    if (video.readyState === 0) {
-        alert("La cámara aún no está lista.");
-        return;
-    }
-    const context = canvas.getContext('2d');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    output.src = canvas.toDataURL('image/jpeg');
-});
-
-// Iniciamos al cargar
-initCamera();
