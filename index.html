@@ -37,6 +37,7 @@
             height: 100%;
             object-fit: cover;
             display: block;
+            background: #000;
         }
         .capture-btn {
             box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
@@ -60,30 +61,39 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        #debug-log {
+        #interaction-layer {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background: rgba(255,0,0,0.7);
-            color: white;
-            font-size: 10px;
-            z-index: 500;
-            display: none;
-            padding: 4px;
-            pointer-events: none;
+            inset: 0;
+            z-index: 150;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            flex-col: center;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
         }
     </style>
 </head>
 <body class="text-white">
 
-    <div id="debug-log"></div>
-
-    <!-- Pantalla de Carga -->
+    <!-- Pantalla de Carga Inicial -->
     <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 z-[300] transition-opacity duration-500">
         <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
         <h2 class="text-xl font-semibold text-white">Iniciando Scanner</h2>
-        <p class="text-gray-400 mt-2 text-center px-4">Preparando visión artificial...</p>
+        <p class="text-gray-400 mt-2 text-center px-4">Preparando inteligencia de imagen...</p>
+    </div>
+
+    <!-- Capa de interacción manual (Despertador de cámara) -->
+    <div id="interaction-layer" class="hidden">
+        <div class="bg-white/10 backdrop-blur-lg p-8 rounded-3xl border border-white/20">
+            <div class="mb-4 text-4xl">📷</div>
+            <h3 class="text-lg font-bold mb-2">Cámara Lista</h3>
+            <p class="text-sm text-gray-300 mb-6">Toca el botón para activar la vista en vivo.</p>
+            <button id="start-stream-btn" class="px-8 py-3 bg-white text-black rounded-full font-bold shadow-xl active:scale-95 transition-transform">
+                ACTIVAR CÁMARA
+            </button>
+        </div>
     </div>
 
     <!-- Visor de Cámara -->
@@ -112,7 +122,7 @@
     <!-- Vista Previa -->
     <div id="preview-overlay" class="flex flex-col items-center p-6">
         <div class="w-full max-w-md flex flex-col items-center">
-            <h3 class="text-xl font-bold mb-6 mt-4">Documento Digitalizado</h3>
+            <h3 class="text-xl font-bold mb-6 mt-4 text-center">Documento Digitalizado</h3>
             <div id="canvas-wrapper" class="w-full flex justify-center mb-8 bg-gray-900 rounded-lg overflow-hidden p-2"></div>
             <div class="flex flex-col gap-4 w-full">
                 <button id="download-btn" class="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform">
@@ -143,59 +153,69 @@
         const loadingScreen = document.getElementById('loading-screen');
         const cameraErrorUi = document.getElementById('camera-error-ui');
         const errorMessage = document.getElementById('error-message');
-        const debugLog = document.getElementById('debug-log');
+        const interactionLayer = document.getElementById('interaction-layer');
+        const startStreamBtn = document.getElementById('start-stream-btn');
         
         let processedCanvas = null;
 
-        function log(msg) {
-            console.log(msg);
-            debugLog.innerText += "\n" + msg;
-            // debugLog.style.display = 'block'; // Activar solo para depuración profunda
-        }
-
         async function initCamera() {
             cameraErrorUi.classList.add('hidden');
-            log("Iniciando solicitud de cámara...");
-
+            interactionLayer.classList.add('hidden');
+            
             const constraintSets = [
-                { video: { facingMode: { exact: "environment" } }, audio: false },
+                { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
                 { video: { facingMode: "environment" }, audio: false },
                 { video: true, audio: false }
             ];
 
             let lastError = null;
-            let success = false;
+            let stream = null;
 
             for (const constraints of constraintSets) {
                 try {
-                    log("Probando constraints: " + JSON.stringify(constraints));
-                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
                     video.srcObject = stream;
                     
-                    // Esperar a que el video esté listo para reproducirse
-                    await new Promise((resolve) => {
+                    // Esperar a que el video pueda reproducirse
+                    await new Promise((resolve, reject) => {
                         video.onloadedmetadata = () => resolve();
+                        video.oncanplay = () => resolve();
+                        setTimeout(() => reject(new Error("Timeout cargando metadata")), 5000);
                     });
 
-                    await video.play();
-                    success = true;
-                    log("Cámara iniciada con éxito");
-                    break;
+                    try {
+                        await video.play();
+                        console.log("Cámara iniciada");
+                    } catch (playErr) {
+                        // Si falla el autoplay, mostramos la capa de interacción
+                        console.warn("Autoplay bloqueado, requiriendo interacción");
+                        interactionLayer.classList.remove('hidden');
+                    }
+                    return; 
                 } catch (err) {
                     lastError = err;
-                    log("Fallo constraint: " + err.name);
+                    console.error("Fallo con constraints:", constraints, err.name);
                 }
             }
 
-            if (!success) {
-                log("Error total: " + lastError.message);
+            if (!stream) {
                 cameraErrorUi.classList.remove('hidden');
-                errorMessage.innerText = "Error: " + lastError.message + "\nVerifica los permisos y usa HTTPS.";
+                errorMessage.innerText = "No se pudo acceder a la cámara.\nError: " + lastError.message + "\nVerifica los permisos y asegúrate de usar HTTPS.";
             }
         }
 
+        // Botón de activación forzada
+        startStreamBtn.addEventListener('click', async () => {
+            try {
+                await video.play();
+                interactionLayer.classList.add('hidden');
+                showToast("Cámara activada ✅");
+            } catch (e) {
+                showToast("Error al activar: toca de nuevo");
+            }
+        });
+
         function onOpenCvReady() {
-            log("OpenCV cargado correctamente");
             loadingScreen.style.opacity = '0';
             setTimeout(() => {
                 loadingScreen.style.display = 'none';
@@ -204,30 +224,28 @@
         }
 
         captureBtn.addEventListener('click', async () => {
-            // Acción de "despertar" si el video está pausado
-            if (video.paused) {
+            // Si el video está en negro o no ha cargado frames
+            if (video.readyState < 2 || video.paused) {
                 try {
                     await video.play();
-                    showToast("Cámara activada ✅");
+                    showToast("Reiniciando señal...");
+                    // Pequeño delay para dejar que capture
+                    setTimeout(processImage, 500);
                 } catch (e) {
-                    log("Error al reproducir: " + e.message);
+                    showToast("Error: No hay señal de cámara");
+                    interactionLayer.classList.remove('hidden');
                 }
                 return;
             }
 
-            if (video.readyState < 2) {
-                showToast("Esperando señal de cámara...");
-                return;
-            }
-
-            showToast("Escaneando...");
+            showToast("Procesando...");
             setTimeout(processImage, 100);
         });
 
         function processImage() {
             try {
-                if (video.videoWidth === 0) {
-                    showToast("Error: Video no iniciado");
+                if (video.videoWidth === 0 || video.readyState < 2) {
+                    showToast("Esperando señal de video...");
                     return;
                 }
 
@@ -239,7 +257,7 @@
                 let src = cv.imread(hiddenCanvas);
                 let dst = new cv.Mat();
                 
-                // Procesamiento
+                // Detección de bordes
                 cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
                 cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
                 cv.Canny(dst, dst, 75, 200, 3, false);
@@ -275,14 +293,14 @@
                     finalImg = src.clone();
                 }
 
-                // Filtro blanco y negro (escaneo)
+                // Filtro blanco y negro (escaneo nítido)
                 cv.cvtColor(finalImg, finalImg, cv.COLOR_RGBA2GRAY, 0);
                 cv.adaptiveThreshold(finalImg, finalImg, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 12);
 
                 if (processedCanvas) processedCanvas.remove();
                 processedCanvas = document.createElement('canvas');
                 processedCanvas.style.maxWidth = "100%";
-                processedCanvas.className = "shadow-2xl rounded";
+                processedCanvas.className = "shadow-2xl rounded-lg";
                 cv.imshow(processedCanvas, finalImg);
                 canvasWrapper.appendChild(processedCanvas);
                 
@@ -290,8 +308,8 @@
 
                 src.delete(); dst.delete(); contours.delete(); hierarchy.delete(); finalImg.delete();
             } catch (e) {
-                log("Error CV: " + e.message);
-                showToast("Error al procesar");
+                console.error(e);
+                showToast("Fallo en procesamiento");
             }
         }
 
@@ -325,11 +343,12 @@
         downloadBtn.addEventListener('click', () => {
             if (!processedCanvas) return;
             const { jsPDF } = window.jspdf;
-            const imgData = processedCanvas.toDataURL('image/jpeg', 0.8);
+            const imgData = processedCanvas.toDataURL('image/jpeg', 0.85);
             const orientation = processedCanvas.width > processedCanvas.height ? 'l' : 'p';
             const pdf = new jsPDF(orientation, 'px', [processedCanvas.width, processedCanvas.height]);
             pdf.addImage(imgData, 'JPEG', 0, 0, processedCanvas.width, processedCanvas.height);
-            pdf.save(`scan_${Date.now()}.pdf`);
+            pdf.save(`escaneo_${Date.now()}.pdf`);
+            showToast("¡PDF Generado!");
         });
 
         retakeBtn.addEventListener('click', () => {
@@ -344,7 +363,7 @@
         }
 
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && !previewOverlay.style.display || previewOverlay.style.display === 'none') {
+            if (!document.hidden && (!previewOverlay.style.display || previewOverlay.style.display === 'none')) {
                 initCamera();
             }
         });
