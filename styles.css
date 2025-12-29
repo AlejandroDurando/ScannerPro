@@ -21,11 +21,13 @@ body {
   line-height: 0;
 }
 
+/* Agrega o modifica esto */
 #preview {
   width: 100%;
-  min-height: 200px; /* Asegura un tamaño mínimo */
-  background-color: #222; /* Si ves este color, es que el video no cargó */
+  min-height: 250px; /* Altura mínima forzada */
+  background-color: #000; /* Fondo negro */
   display: block;
+  object-fit: cover; /* Para que no se deforme la imagen */
 }
 
 /* Guía visual para centrar el documento */

@@ -10,14 +10,16 @@
     <div class="app-container">
         <h2>Escáner de Documentos</h2>
         
+        <div id="error-log" style="color: red; background: #ffe6e6; padding: 10px; display: none; margin-bottom: 10px; border-radius: 5px; font-size: 14px;"></div>
+
         <div class="video-wrapper">
-            <video id="preview" autoplay playsinline></video>
+            <video id="preview" autoplay playsinline muted></video>
             <div class="focus-guide"></div>
         </div>
 
         <div class="controls">
+            <button id="start-camera-btn" style="background-color: #28a745; margin-bottom: 10px; display: none;">Inicias Cámara Manualmente</button>
             <button id="capture-btn">Escanear Documento</button>
-            <button id="download-btn" style="display: none;">Descargar PDF/Imagen</button>
         </div>
 
         <canvas id="canvas" style="display: none;"></canvas>

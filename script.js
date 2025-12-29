@@ -2,10 +2,19 @@ const video = document.getElementById('preview');
 const canvas = document.getElementById('canvas');
 const output = document.getElementById('output');
 const captureBtn = document.getElementById('capture-btn');
+const startBtn = document.getElementById('start-camera-btn');
+const errorLog = document.getElementById('error-log');
 
-// Iniciar cámara trasera automáticamente
+// Función para mostrar errores en la pantalla del móvil
+function logError(msg) {
+    errorLog.style.display = 'block';
+    errorLog.innerHTML += `<p>${msg}</p>`;
+    console.error(msg);
+}
+
 async function initCamera() {
     try {
+        // Pedimos permiso
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: "environment",
@@ -14,38 +23,42 @@ async function initCamera() {
             }, 
             audio: false 
         });
-        
-        video.setAttribute('autoplay', '');
-        video.setAttribute('muted', '');
-        video.setAttribute('playsinline', '');
-        video.style.border = "5px solid red";
-        
-        video.srcObject = stream;
 
-        // IMPORTANTE: Forzar el play después de asignar el stream
-        video.onloadedmetadata = () => {
-            video.play().catch(e => console.error("Error al reproducir video:", e));
-        };
+        video.srcObject = stream;
         
+        // Intentamos reproducir
+        try {
+            await video.play();
+        } catch (playError) {
+            logError("Autoplay bloqueado. Pulsa el botón verde.");
+            startBtn.style.display = 'inline-block'; // Mostramos botón manual
+        }
+
     } catch (err) {
-        alert("Error de cámara: " + err.name);
+        logError("Error de acceso: " + err.message + "<br>Revisa los permisos del navegador.");
+        startBtn.style.display = 'inline-block';
     }
 }
 
-captureBtn.addEventListener('click', () => {
-    const context = canvas.getContext('2d');
-    
-    // Ajustar resolución del canvas a la del video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Dibujar el frame actual en el canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Convertir a imagen y mostrar
-    const dataUrl = canvas.toDataURL('image/jpeg');
-    output.src = dataUrl;
+// Botón de respaldo para iniciar cámara manualmente (iOS a veces lo requiere)
+startBtn.addEventListener('click', async () => {
+    startBtn.style.display = 'none';
+    errorLog.style.display = 'none'; // Limpiar errores previos
+    errorLog.innerHTML = '';
+    await initCamera();
 });
 
-// Arrancar al cargar la página
+captureBtn.addEventListener('click', () => {
+    if (video.readyState === 0) {
+        alert("La cámara aún no está lista.");
+        return;
+    }
+    const context = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    output.src = canvas.toDataURL('image/jpeg');
+});
+
+// Iniciamos al cargar
 initCamera();
