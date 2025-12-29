@@ -25,6 +25,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            background: #000;
         }
         video {
             width: 100%;
@@ -41,7 +42,7 @@
         }
         #preview-overlay {
             display: none;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0,0,0,0.95);
             z-index: 50;
         }
         .loader {
@@ -49,8 +50,8 @@
             animation: spinner 1.5s linear infinite;
         }
         @keyframes spinner {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0__PERCENT__ { transform: rotate(0deg); }
+            100__PERCENT__ { transform: rotate(360deg); }
         }
         canvas {
             max-width: 100%;
@@ -66,12 +67,14 @@
     <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 z-[100] transition-opacity duration-500">
         <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
         <h2 class="text-xl font-semibold">Iniciando Scanner Pro</h2>
-        <p class="text-gray-400 mt-2">Cargando módulos de IA...</p>
+        <p class="text-gray-400 mt-2">Cargando módulos de visión...</p>
     </div>
 
     <!-- Visor de Cámara -->
     <div id="video-container">
-        <video id="video" autoplay playsinline></video>
+        <!-- Agregado 'muted' y 'playsinline' para compatibilidad móvil -->
+        <video id="video" autoplay playsinline muted></video>
+        
         <!-- Overlay de Guía -->
         <div class="absolute inset-0 border-[40px] border-black/20 pointer-events-none flex items-center justify-center">
              <div class="w-full h-full border-2 border-white/30 rounded-lg"></div>
@@ -87,21 +90,21 @@
 
     <!-- Vista Previa del Documento Procesado -->
     <div id="preview-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-4">
-        <h3 class="text-xl font-bold mb-4">Documento Escaneado</h3>
+        <h3 class="text-xl font-bold mb-4 text-center">Documento Procesado</h3>
         <div id="canvas-wrapper" class="w-full flex justify-center mb-6">
             <!-- El canvas resultante se insertará aquí -->
         </div>
-        <div class="flex gap-4 w-full max-w-sm">
-            <button id="retake-btn" class="flex-1 py-3 bg-gray-700 rounded-xl font-semibold">Repetir</button>
-            <button id="download-btn" class="flex-1 py-3 bg-blue-600 rounded-xl font-semibold flex items-center justify-center gap-2">
-                <span>Descargar PDF</span>
+        <div class="flex flex-col gap-3 w-full max-w-sm">
+            <button id="download-btn" class="w-full py-4 bg-blue-600 rounded-xl font-bold text-lg flex items-center justify-center gap-2 active:bg-blue-700">
+                <span>Guardar como PDF</span>
             </button>
+            <button id="retake-btn" class="w-full py-3 bg-gray-800 rounded-xl font-semibold active:bg-gray-700">Descartar y Repetir</button>
         </div>
     </div>
 
     <!-- Mensajes de Estado -->
-    <div id="toast" class="fixed top-8 left-1/2 -translate-x-1/2 px-6 py-2 bg-black/60 backdrop-blur rounded-full text-sm opacity-0 transition-opacity">
-        Buscando documento...
+    <div id="toast" class="fixed top-8 left-1/2 -translate-x-1/2 px-6 py-2 bg-black/80 backdrop-blur rounded-full text-sm opacity-0 transition-opacity z-[60]">
+        Procesando...
     </div>
 
     <!-- Canvases invisibles para procesamiento -->
@@ -119,39 +122,60 @@
         
         let processedCanvas = null;
 
-        // 1. Inicializar Cámara
+        // 1. Inicializar Cámara con validación de seguridad
         async function initCamera() {
+            // Verificar si estamos en un contexto seguro (necesario para la cámara)
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                alert("La cámara requiere una conexión segura (HTTPS). Si estás en red local, usa 'localhost' o habilita HTTPS.");
+            }
+
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+                const constraints = {
                     video: { 
-                        facingMode: 'environment',
+                        facingMode: { ideal: 'environment' },
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
                     },
                     audio: false
-                });
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
+                
+                // Forzar reproducción al cargar metadatos
+                video.onloadedmetadata = () => {
+                    video.play().catch(e => console.error("Error al iniciar reproducción:", e));
+                };
+
             } catch (err) {
-                console.error("Error al acceder a la cámara:", err);
-                alert("No se pudo acceder a la cámara. Por favor, asegúrate de dar los permisos necesarios.");
+                console.error("Error detallado de cámara:", err);
+                let message = "No se pudo acceder a la cámara.";
+                if (err.name === 'NotAllowedError') message = "Permiso denegado. Por favor, permite el acceso a la cámara en los ajustes del sitio.";
+                if (err.name === 'NotFoundError') message = "No se encontró ninguna cámara trasera.";
+                
+                alert(message);
             }
         }
 
         // 2. OpenCV Listo
         function onOpenCvReady() {
-            console.log('OpenCV.js está listo.');
             loadingScreen.style.opacity = '0';
-            setTimeout(() => loadingScreen.style.display = 'none', 500);
-            initCamera();
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+                initCamera();
+            }, 500);
         }
 
         // 3. Captura y Procesamiento
         captureBtn.addEventListener('click', () => {
-            processImage();
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                showToast("Analizando imagen...");
+                // Pequeño delay para dejar que el toast se vea
+                setTimeout(processImage, 100);
+            }
         });
 
         function processImage() {
-            // Dibujar frame actual en canvas oculto
             const width = video.videoWidth;
             const height = video.videoHeight;
             hiddenCanvas.width = width;
@@ -159,21 +183,19 @@
             const ctx = hiddenCanvas.getContext('2d');
             ctx.drawImage(video, 0, 0, width, height);
 
-            // Leer desde OpenCV
             let src = cv.imread(hiddenCanvas);
             let dst = new cv.Mat();
             
-            // --- PASO 1: Preprocesamiento ---
+            // --- Preprocesamiento ---
             cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
             cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
             cv.Canny(dst, dst, 75, 200, 3, false);
 
-            // --- PASO 2: Detección de Contornos ---
+            // --- Detección de Contornos ---
             let contours = new cv.MatVector();
             let hierarchy = new cv.Mat();
             cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-            // Encontrar el contorno más grande que parezca un papel
             let maxArea = 0;
             let maxContourIndex = -1;
             for (let i = 0; i < contours.size(); ++i) {
@@ -193,48 +215,41 @@
             let finalImg = new cv.Mat();
 
             if (maxContourIndex !== -1) {
-                // Si encontramos un rectángulo (papel)
                 let cnt = contours.get(maxContourIndex);
                 let peri = cv.arcLength(cnt, true);
                 let approx = new cv.Mat();
                 cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-
-                // Transformación de Perspectiva (Warp)
                 finalImg = applyWarp(src, approx);
                 approx.delete();
             } else {
-                // Si no se detecta nada claro, usar toda la imagen
                 finalImg = src.clone();
             }
 
-            // --- PASO 3: Filtro de Escaneo (Limpieza) ---
+            // --- Efecto de Escaneo Real ---
             cv.cvtColor(finalImg, finalImg, cv.COLOR_RGBA2GRAY, 0);
-            cv.adaptiveThreshold(finalImg, finalImg, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 10);
+            // Umbral adaptativo para texto nítido y fondo blanco
+            cv.adaptiveThreshold(finalImg, finalImg, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 12);
 
             // Mostrar resultado
             if (processedCanvas) canvasWrapper.removeChild(processedCanvas);
             processedCanvas = document.createElement('canvas');
+            processedCanvas.className = "max-w-full shadow-2xl border-2 border-white/20";
             cv.imshow(processedCanvas, finalImg);
             canvasWrapper.appendChild(processedCanvas);
             
             previewOverlay.style.display = 'flex';
 
-            // Limpieza de memoria OpenCV
+            // Limpieza
             src.delete(); dst.delete(); contours.delete(); hierarchy.delete(); finalImg.delete();
         }
 
-        // Función para ordenar puntos y aplicar warp
         function applyWarp(src, pts) {
-            let width = src.cols;
-            let height = src.rows;
-
-            // Extraer coordenadas de approxPolyDP
             let points = [];
             for (let i = 0; i < 4; i++) {
                 points.push({ x: pts.data32S[i * 2], y: pts.data32S[i * 2 + 1] });
             }
 
-            // Ordenar: Top-Left, Top-Right, Bottom-Right, Bottom-Left
+            // Ordenar puntos
             points.sort((a, b) => a.y - b.y);
             let topList = points.slice(0, 2).sort((a, b) => a.x - b.x);
             let bottomList = points.slice(2, 4).sort((a, b) => a.x - b.x);
@@ -246,7 +261,6 @@
                 bottomList[0].x, bottomList[0].y
             ]);
 
-            // Determinar dimensiones del nuevo documento
             const w1 = Math.hypot(topList[1].x - topList[0].x, topList[1].y - topList[0].y);
             const w2 = Math.hypot(bottomList[1].x - bottomList[0].x, bottomList[1].y - bottomList[0].y);
             const maxWidth = Math.max(w1, w2);
@@ -263,29 +277,23 @@
             ]);
 
             let M = cv.getPerspectiveTransform(srcCoords, dstCoords);
-            let dsize = new cv.Size(maxWidth, maxHeight);
             let result = new cv.Mat();
-            cv.warpPerspective(src, result, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+            cv.warpPerspective(src, result, M, new cv.Size(maxWidth, maxHeight), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
 
             srcCoords.delete(); dstCoords.delete(); M.delete();
             return result;
         }
 
-        // 4. Generación de PDF
+        // 4. PDF
         downloadBtn.addEventListener('click', () => {
             if (!processedCanvas) return;
-
             const { jsPDF } = window.jspdf;
-            const imgData = processedCanvas.toDataURL('image/jpeg', 0.8);
-            
-            // Orientación según dimensiones
+            const imgData = processedCanvas.toDataURL('image/jpeg', 0.9);
             const orientation = processedCanvas.width > processedCanvas.height ? 'l' : 'p';
             const pdf = new jsPDF(orientation, 'px', [processedCanvas.width, processedCanvas.height]);
-            
             pdf.addImage(imgData, 'JPEG', 0, 0, processedCanvas.width, processedCanvas.height);
-            pdf.save(`escaneo_${new Date().getTime()}.pdf`);
-            
-            showToast("¡PDF Descargado!");
+            pdf.save(`scan_${new Date().getTime()}.pdf`);
+            showToast("PDF guardado correctamente");
         });
 
         retakeBtn.addEventListener('click', () => {
@@ -298,7 +306,6 @@
             toast.style.opacity = '1';
             setTimeout(() => toast.style.opacity = '0', 2000);
         }
-
     </script>
 </body>
 </html>
