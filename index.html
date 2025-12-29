@@ -123,6 +123,50 @@
         };
 
         window.onload = initCamera;
+
+
+        // ... (dentro de tu etiqueta <script>)
+
+async function initCamera() {
+    printLog("Solicitando cámara...");
+    const constraints = {
+        video: { 
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+        }
+    };
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        
+        // Configuración crítica para móviles
+        video.setAttribute("playsinline", true);
+        video.setAttribute("autoplay", true);
+        video.setAttribute("muted", true); // Sin esto, muchos móviles no dejan hacer autoplay
+
+        video.onloadedmetadata = () => {
+            printLog("Metadatos cargados. Intentando reproducir...");
+            video.play().then(() => {
+                printLog("¡Video en vivo!");
+            }).catch(err => {
+                printLog("Haz clic en el cuadro negro para iniciar");
+            });
+        };
+    } catch (err) {
+        printLog("Error: " + err.message);
+    }
+}
+
+// NUEVO: Si el video se queda pausado (el botón de play que ves), esto lo fuerza al tocarlo
+video.addEventListener('click', () => {
+    video.play();
+    printLog("Play forzado por usuario");
+});
+
+window.onload = initCamera;
+
     </script>
 </body>
 </html>
