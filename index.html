@@ -3,114 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scanner Pro v3</title>
+    <title>Scanner Pro Direct</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
     <style>
-        /* Forzamos que el video ocupe el espacio y sea visible */
-        video { 
-            width: 100% !important; 
-            height: auto !important; 
-            min-height: 200px;
-            background: #1a1a1a;
+        /* Eliminamos cualquier control nativo del navegador */
+        video::-webkit-media-controls { display: none !important; }
+        video::-webkit-media-controls-start-playlist-button { display: none !important; }
+        video::-webkit-media-controls-enclosure { display: none !important; }
+        
+        video {
+            width: 100%;
+            height: 100vh;
             object-fit: cover;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            background: black;
+        }
+
+        .ui-layer {
+            position: fixed;
+            z-index: 10;
+            bottom: 40px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        #snap {
+            pointer-events: auto;
+            width: 80px;
+            height: 80px;
+            background: white;
+            border: 6px solid rgba(59, 130, 246, 0.5);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #preview {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: black;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
         }
     </style>
 </head>
-<body class="bg-black text-white p-4">
+<body class="bg-black">
 
-    <div class="max-w-md mx-auto">
-        <header class="flex justify-between items-center mb-2">
-            <h1 class="text-xl font-bold italic text-blue-500">SCANNER PRO</h1>
-            <div id="statusDot" class="w-3 h-3 bg-red-500 rounded-full"></div>
-        </header>
+    <video id="video" autoplay muted playsinline webkit-playsinline></video>
 
-        <div id="log" class="text-[10px] text-yellow-500 mb-2 h-8 overflow-hidden font-mono"></div>
+    <div class="ui-layer">
+        <button id="snap"></button>
+    </div>
 
-        <div class="relative rounded-3xl overflow-hidden border-2 border-blue-900/50 shadow-2xl bg-gray-900">
-            <video id="video" autoplay muted playsinline webkit-playsinline></video>
-            
-            <button id="forcePlay" class="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-black/60 z-10 hidden">
-                <span class="bg-white text-black px-4 py-2 rounded-full font-bold">TOCA AQUÍ PARA ACTIVAR CÁMARA</span>
-            </button>
-        </div>
-
-        <div class="mt-6 flex justify-center">
-            <button id="snap" class="w-20 h-20 bg-white rounded-full border-8 border-gray-800 shadow-white/20 shadow-lg active:scale-90 transition-all"></button>
-        </div>
-
-        <div id="preview" class="hidden fixed inset-0 bg-black z-50 p-4 flex flex-col items-center justify-center">
-            <canvas id="canvasOut" class="max-w-full rounded-lg shadow-2xl"></canvas>
-            <div class="flex gap-4 mt-8 w-full max-w-sm">
-                <button onclick="location.reload()" class="flex-1 bg-zinc-800 p-4 rounded-2xl font-bold text-red-400">BORRAR</button>
-                <button id="save" class="flex-1 bg-blue-600 p-4 rounded-2xl font-bold">PDF</button>
-            </div>
+    <div id="preview">
+        <canvas id="canvasOut" class="max-w-full h-auto rounded-lg shadow-2xl mt-10"></canvas>
+        <div class="flex gap-4 mt-auto mb-10 w-full max-w-sm">
+            <button onclick="location.reload()" class="flex-1 bg-zinc-800 text-white p-5 rounded-2xl font-bold">REPETIR</button>
+            <button id="save" class="flex-1 bg-blue-600 text-white p-5 rounded-2xl font-bold">DESCARGAR PDF</button>
         </div>
     </div>
 
     <script>
         const video = document.getElementById('video');
-        const log = document.getElementById('log');
-        const forcePlayBtn = document.getElementById('forcePlay');
+        const snapBtn = document.getElementById('snap');
+        const preview = document.getElementById('preview');
+        const canvasOut = document.getElementById('canvasOut');
 
-        function printLog(m) { log.innerText = m; console.log(m); }
-
-        var Module = { onRuntimeInitialized() { 
-            document.getElementById('statusDot').className = "w-3 h-3 bg-green-500 rounded-full animate-pulse";
-            printLog("OpenCV Listo");
-        }};
-
-        async function start() {
-            printLog("Iniciando...");
+        // Función para arrancar la cámara
+        async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
+                    video: { 
+                        facingMode: "environment",
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
                     audio: false
                 });
                 
                 video.srcObject = stream;
 
-                // Intento de reproducción automática
-                video.play().then(() => {
-                    printLog("Cámara activa");
-                }).catch(e => {
-                    printLog("El sistema requiere toque manual");
-                    forcePlayBtn.classList.remove('hidden');
+                // Intentar reproducir automáticamente
+                video.play().catch(err => {
+                    console.log("Esperando interacción para reproducir");
+                    // Si falla el auto-play, forzamos con un click en cualquier parte
+                    document.body.addEventListener('click', () => video.play(), { once: true });
                 });
 
-            } catch (e) {
-                printLog("Error: " + e.message);
+            } catch (err) {
+                alert("Error de cámara: " + err.message);
             }
         }
 
-        // Al tocar el botón de emergencia o el video
-        forcePlayBtn.onclick = () => {
-            video.play();
-            forcePlayBtn.classList.add('hidden');
-        };
+        // Capturar y procesar con OpenCV
+        snapBtn.onclick = () => {
+            if (typeof cv === 'undefined') return alert("Cargando motor de imagen...");
 
-        document.getElementById('snap').onclick = () => {
-            const cap = new cv.VideoCapture(video);
-            let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
-            cap.read(src);
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            let src = cv.imread(canvas);
             let dst = new cv.Mat();
+            
+            // Filtro de "Escaner" profesional
             cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
             cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 15, 12);
+            
             cv.imshow('canvasOut', dst);
-            document.getElementById('preview').classList.remove('hidden');
+            preview.style.display = 'flex';
+            
             src.delete(); dst.delete();
         };
 
+        // Guardar PDF
         document.getElementById('save').onclick = () => {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            const imgData = document.getElementById('canvasOut').toDataURL('image/jpeg', 0.9);
+            const imgData = canvasOut.toDataURL('image/jpeg', 0.8);
             doc.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-            doc.save("scan.pdf");
+            doc.save("documento_escaneado.pdf");
         };
 
-        window.onload = start;
+        window.onload = startCamera;
     </script>
 </body>
 </html>
