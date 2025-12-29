@@ -2,25 +2,51 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Escáner Pro</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Nativo</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
+        .btn {
+            background-color: #007bff; color: white; padding: 15px 30px;
+            font-size: 18px; border-radius: 8px; border: none; cursor: pointer;
+            margin: 20px 0; display: inline-block;
+        }
+        #preview { width: 100%; max-width: 500px; border: 2px solid #333; display: none; margin-top: 10px; }
+        /* Ocultamos el input feo original */
+        input[type="file"] { display: none; }
+    </style>
 </head>
 <body>
-    <div class="app-container">
-        <h2>Escáner de Documentos</h2>
-        <p>Usa la cámara nativa para mejor enfoque y calidad.</p>
 
-        <label class="custom-file-upload">
-            <input type="file" id="cameraInput" accept="image/*" capture="environment">
-            📸 Tomar Foto de Documento
-        </label>
+    <h2>Escáner Pro</h2>
+    
+    <label for="cameraInput" class="btn">
+        📷 Tomar Foto del Documento
+    </label>
 
-        <div class="result-container" id="resultContainer" style="display: none;">
-            <h3>Documento Escaneado:</h3>
-            <img id="output" src="" alt="Tu documento">
-        </div>
-    </div>
-    <script src="script.js"></script>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+
+    <h3>Resultado:</h3>
+    <img id="preview" alt="Tu documento aparecerá aquí">
+
+    <script>
+        const input = document.getElementById('cameraInput');
+        const preview = document.getElementById('preview');
+
+        input.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    
+                    // Aquí podrías agregar filtros CSS si quieres (blanco y negro)
+                    preview.style.filter = "grayscale(1) contrast(1.5)";
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
 </body>
 </html>
