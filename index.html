@@ -18,7 +18,7 @@
             height: 100%;
             width: 100%;
             overflow: hidden;
-            position: fixed; /* Evita scrolls accidentales en móvil */
+            position: fixed;
         }
         #video-container {
             position: absolute;
@@ -30,7 +30,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 5;
+            z-index: 10;
         }
         video {
             width: 100%;
@@ -41,17 +41,13 @@
         .capture-btn {
             box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
             transition: all 0.2s ease;
-            z-index: 50;
+            z-index: 100;
             -webkit-tap-highlight-color: transparent;
-        }
-        .capture-btn:active {
-            transform: scale(0.9);
-            background-color: #f0f0f0;
         }
         #preview-overlay {
             display: none;
             background: #000;
-            z-index: 100;
+            z-index: 200;
             position: fixed;
             inset: 0;
             overflow-y: auto;
@@ -64,60 +60,76 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        #debug-log {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255,0,0,0.7);
+            color: white;
+            font-size: 10px;
+            z-index: 500;
+            display: none;
+            padding: 4px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="text-white">
 
+    <div id="debug-log"></div>
+
     <!-- Pantalla de Carga -->
-    <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 z-[200] transition-opacity duration-500">
+    <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 z-[300] transition-opacity duration-500">
         <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
-        <h2 class="text-xl font-semibold">Iniciando Scanner</h2>
-        <p class="text-gray-400 mt-2 text-center px-4">Cargando módulos de visión artificial...</p>
+        <h2 class="text-xl font-semibold text-white">Iniciando Scanner</h2>
+        <p class="text-gray-400 mt-2 text-center px-4">Preparando visión artificial...</p>
     </div>
 
     <!-- Visor de Cámara -->
     <div id="video-container">
-        <!-- Importante: muted y playsinline deben estar presentes para móviles -->
         <video id="video" autoplay playsinline muted webkit-playsinline></video>
         
         <!-- Guía Visual -->
-        <div class="absolute inset-0 border-[30px] border-black/40 pointer-events-none flex items-center justify-center z-10">
+        <div class="absolute inset-0 border-[30px] border-black/40 pointer-events-none flex items-center justify-center z-20">
              <div class="w-full h-full border border-white/40 rounded-sm"></div>
+        </div>
+
+        <div id="camera-error-ui" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-30 p-6 text-center">
+            <p class="text-red-400 mb-4 font-bold" id="error-message">Error al acceder a la cámara</p>
+            <button onclick="initCamera()" class="px-6 py-2 bg-white text-black rounded-full font-bold">Reintentar</button>
         </div>
     </div>
 
     <!-- Controles Inferiores -->
-    <div id="controls" class="fixed bottom-0 left-0 w-full p-8 flex flex-col items-center gap-4 z-40 bg-gradient-to-t from-black/80 to-transparent">
-        <button id="capture-btn" class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-xl">
+    <div id="controls" class="fixed bottom-0 left-0 w-full p-8 flex flex-col items-center gap-4 z-50 bg-gradient-to-t from-black/90 to-transparent">
+        <button id="capture-btn" class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-transform">
             <div class="w-16 h-16 border-2 border-black/10 rounded-full"></div>
         </button>
-        <p class="text-xs text-white/60 font-medium uppercase tracking-widest">Presiona para escanear</p>
+        <p class="text-xs text-white/70 font-medium uppercase tracking-widest">Toca para Escanear</p>
     </div>
 
     <!-- Vista Previa -->
     <div id="preview-overlay" class="flex flex-col items-center p-6">
         <div class="w-full max-w-md flex flex-col items-center">
             <h3 class="text-xl font-bold mb-6 mt-4">Documento Digitalizado</h3>
-            <div id="canvas-wrapper" class="w-full flex justify-center mb-8 bg-gray-900 rounded-lg overflow-hidden p-2">
-                <!-- El canvas se inyecta aquí -->
-            </div>
+            <div id="canvas-wrapper" class="w-full flex justify-center mb-8 bg-gray-900 rounded-lg overflow-hidden p-2"></div>
             <div class="flex flex-col gap-4 w-full">
                 <button id="download-btn" class="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform">
                     Descargar como PDF
                 </button>
                 <button id="retake-btn" class="w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold active:scale-95 transition-transform text-white/80">
-                    Descartar y volver a intentar
+                    Tomar otra foto
                 </button>
             </div>
         </div>
     </div>
 
     <!-- Notificaciones -->
-    <div id="toast" class="fixed top-12 left-1/2 -translate-x-1/2 px-6 py-3 bg-white text-black font-bold rounded-full text-sm opacity-0 transition-all duration-300 z-[300] shadow-2xl scale-90">
+    <div id="toast" class="fixed top-12 left-1/2 -translate-x-1/2 px-6 py-3 bg-white text-black font-bold rounded-full text-sm opacity-0 transition-all duration-300 z-[400] shadow-2xl">
         Procesando...
     </div>
 
-    <!-- Canvas oculto -->
     <canvas id="hidden-canvas" style="display:none;"></canvas>
 
     <script>
@@ -129,48 +141,61 @@
         const canvasWrapper = document.getElementById('canvas-wrapper');
         const hiddenCanvas = document.getElementById('hidden-canvas');
         const loadingScreen = document.getElementById('loading-screen');
+        const cameraErrorUi = document.getElementById('camera-error-ui');
+        const errorMessage = document.getElementById('error-message');
+        const debugLog = document.getElementById('debug-log');
         
         let processedCanvas = null;
 
-        // 1. Inicializar Cámara con mayor compatibilidad
+        function log(msg) {
+            console.log(msg);
+            debugLog.innerText += "\n" + msg;
+            // debugLog.style.display = 'block'; // Activar solo para depuración profunda
+        }
+
         async function initCamera() {
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                showToast("⚠️ Requiere HTTPS para la cámara");
+            cameraErrorUi.classList.add('hidden');
+            log("Iniciando solicitud de cámara...");
+
+            const constraintSets = [
+                { video: { facingMode: { exact: "environment" } }, audio: false },
+                { video: { facingMode: "environment" }, audio: false },
+                { video: true, audio: false }
+            ];
+
+            let lastError = null;
+            let success = false;
+
+            for (const constraints of constraintSets) {
+                try {
+                    log("Probando constraints: " + JSON.stringify(constraints));
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    video.srcObject = stream;
+                    
+                    // Esperar a que el video esté listo para reproducirse
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = () => resolve();
+                    });
+
+                    await video.play();
+                    success = true;
+                    log("Cámara iniciada con éxito");
+                    break;
+                } catch (err) {
+                    lastError = err;
+                    log("Fallo constraint: " + err.name);
+                }
             }
 
-            const constraints = {
-                video: { 
-                    facingMode: 'environment',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
-                audio: false
-            };
-
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-                
-                // Forzamos la carga y reproducción
-                video.setAttribute('autoplay', '');
-                video.setAttribute('muted', '');
-                video.setAttribute('playsinline', '');
-                
-                video.onloadedmetadata = () => {
-                    video.play().catch(e => {
-                        console.error("Autoplay bloqueado:", e);
-                        showToast("Toca el botón para activar video");
-                    });
-                };
-
-            } catch (err) {
-                console.error("Cámara error:", err);
-                alert("No se pudo acceder a la cámara trasera. Asegúrate de dar permisos.");
+            if (!success) {
+                log("Error total: " + lastError.message);
+                cameraErrorUi.classList.remove('hidden');
+                errorMessage.innerText = "Error: " + lastError.message + "\nVerifica los permisos y usa HTTPS.";
             }
         }
 
-        // 2. OpenCV Listo
         function onOpenCvReady() {
+            log("OpenCV cargado correctamente");
             loadingScreen.style.opacity = '0';
             setTimeout(() => {
                 loadingScreen.style.display = 'none';
@@ -178,28 +203,31 @@
             }, 500);
         }
 
-        // 3. Captura con "Despertador" de video
         captureBtn.addEventListener('click', async () => {
-            // Si el video está detenido por el sistema, el primer click lo despierta
-            if (video.paused || video.readyState < 2) {
+            // Acción de "despertar" si el video está pausado
+            if (video.paused) {
                 try {
                     await video.play();
                     showToast("Cámara activada ✅");
                 } catch (e) {
-                    showToast("Error al activar cámara");
+                    log("Error al reproducir: " + e.message);
                 }
                 return;
             }
 
-            showToast("Digitalizando...");
-            setTimeout(processImage, 150);
+            if (video.readyState < 2) {
+                showToast("Esperando señal de cámara...");
+                return;
+            }
+
+            showToast("Escaneando...");
+            setTimeout(processImage, 100);
         });
 
         function processImage() {
             try {
-                // Verificar que tengamos datos de video reales
                 if (video.videoWidth === 0) {
-                    showToast("Error: Sin señal de video");
+                    showToast("Error: Video no iniciado");
                     return;
                 }
 
@@ -211,7 +239,7 @@
                 let src = cv.imread(hiddenCanvas);
                 let dst = new cv.Mat();
                 
-                // Conversión y detección de bordes
+                // Procesamiento
                 cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
                 cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
                 cv.Canny(dst, dst, 75, 200, 3, false);
@@ -228,7 +256,6 @@
                     let peri = cv.arcLength(cnt, true);
                     let approx = new cv.Mat();
                     cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-
                     if (approx.rows == 4 && area > maxArea) {
                         maxArea = area;
                         maxContourIndex = i;
@@ -248,26 +275,23 @@
                     finalImg = src.clone();
                 }
 
-                // Filtro blanco y negro optimizado para lectura
+                // Filtro blanco y negro (escaneo)
                 cv.cvtColor(finalImg, finalImg, cv.COLOR_RGBA2GRAY, 0);
                 cv.adaptiveThreshold(finalImg, finalImg, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 12);
 
-                // Actualizar Interfaz
                 if (processedCanvas) processedCanvas.remove();
                 processedCanvas = document.createElement('canvas');
                 processedCanvas.style.maxWidth = "100%";
-                processedCanvas.style.height = "auto";
                 processedCanvas.className = "shadow-2xl rounded";
                 cv.imshow(processedCanvas, finalImg);
                 canvasWrapper.appendChild(processedCanvas);
                 
                 previewOverlay.style.display = 'flex';
 
-                // Limpiar memoria
                 src.delete(); dst.delete(); contours.delete(); hierarchy.delete(); finalImg.delete();
             } catch (e) {
-                console.error(e);
-                showToast("Error de procesamiento");
+                log("Error CV: " + e.message);
+                showToast("Error al procesar");
             }
         }
 
@@ -276,7 +300,6 @@
             for (let i = 0; i < 4; i++) {
                 points.push({ x: pts.data32S[i * 2], y: pts.data32S[i * 2 + 1] });
             }
-
             points.sort((a, b) => a.y - b.y);
             let topList = points.slice(0, 2).sort((a, b) => a.x - b.x);
             let bottomList = points.slice(2, 4).sort((a, b) => a.x - b.x);
@@ -295,21 +318,18 @@
             let M = cv.getPerspectiveTransform(srcCoords, dstCoords);
             let result = new cv.Mat();
             cv.warpPerspective(src, result, M, new cv.Size(w, h));
-
             srcCoords.delete(); dstCoords.delete(); M.delete();
             return result;
         }
 
-        // 4. Descarga de PDF
         downloadBtn.addEventListener('click', () => {
             if (!processedCanvas) return;
             const { jsPDF } = window.jspdf;
-            const imgData = processedCanvas.toDataURL('image/jpeg', 0.85);
+            const imgData = processedCanvas.toDataURL('image/jpeg', 0.8);
             const orientation = processedCanvas.width > processedCanvas.height ? 'l' : 'p';
             const pdf = new jsPDF(orientation, 'px', [processedCanvas.width, processedCanvas.height]);
             pdf.addImage(imgData, 'JPEG', 0, 0, processedCanvas.width, processedCanvas.height);
-            pdf.save(`escaneo_${Date.now()}.pdf`);
-            showToast("PDF Guardado");
+            pdf.save(`scan_${Date.now()}.pdf`);
         });
 
         retakeBtn.addEventListener('click', () => {
@@ -320,16 +340,13 @@
             const toast = document.getElementById('toast');
             toast.innerText = msg;
             toast.style.opacity = '1';
-            toast.style.transform = 'translateX(-50%) translateY(10px) scale(1)';
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(-50%) translateY(0px) scale(0.9)';
-            }, 2500);
+            setTimeout(() => toast.style.opacity = '0', 2500);
         }
 
-        // Reiniciar cámara si el usuario cambia de pestaña y vuelve
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) initCamera();
+            if (!document.hidden && !previewOverlay.style.display || previewOverlay.style.display === 'none') {
+                initCamera();
+            }
         });
     </script>
 </body>
