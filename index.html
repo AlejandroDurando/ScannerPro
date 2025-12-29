@@ -57,12 +57,28 @@
         };
 
         async function startCamera() {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment", width: { ideal: 1080 } }, 
-                audio: false 
-            });
-            video.srcObject = stream;
-        }
+    const constraints = {
+        video: {
+            facingMode: { exact: "environment" }, // Fuerza la cámara trasera
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+        },
+        audio: false
+    };
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        // Forzar el play para iOS
+        video.setAttribute("playsinline", true);
+        video.play();
+    } catch (err) {
+        console.error("Error con cámara trasera, intentando cualquier cámara:", err);
+        // Si falla la trasera (ej. en PC), intenta con cualquier cámara disponible
+        const basicStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = basicStream;
+    }
+}
 
         document.getElementById('captureBtn').addEventListener('click', () => {
             if(!cvReady) return alert("Espera a que cargue el motor de imagen");
