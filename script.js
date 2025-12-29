@@ -8,21 +8,27 @@ async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
-                facingMode: "environment" // Esto busca la cámara trasera
+                facingMode: "environment",
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
             }, 
             audio: false 
         });
         
-        // Esta es la parte clave: asignar el stream al video
-        const videoElement = document.getElementById('preview');
-        videoElement.srcObject = stream;
+        video.setAttribute('autoplay', '');
+        video.setAttribute('muted', '');
+        video.setAttribute('playsinline', '');
+        video.style.border = "5px solid red";
         
-        // Forzar el play por si el navegador lo pausa
-        videoElement.play(); 
+        video.srcObject = stream;
+
+        // IMPORTANTE: Forzar el play después de asignar el stream
+        video.onloadedmetadata = () => {
+            video.play().catch(e => console.error("Error al reproducir video:", e));
+        };
         
     } catch (err) {
-        console.error("Error detallado:", err);
-        alert("No se pudo acceder a la cámara. Revisa si estás en una pestaña independiente y con HTTPS.");
+        alert("Error de cámara: " + err.name);
     }
 }
 

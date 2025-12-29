@@ -23,7 +23,9 @@ body {
 
 #preview {
   width: 100%;
-  height: auto;
+  min-height: 200px; /* Asegura un tamaño mínimo */
+  background-color: #222; /* Si ves este color, es que el video no cargó */
+  display: block;
 }
 
 /* Guía visual para centrar el documento */
