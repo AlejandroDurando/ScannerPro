@@ -1,9 +1,9 @@
-
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scanner Pro - SPA</title>
+    <title>Scanner Pro - Multi-página</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- jsPDF -->
@@ -63,9 +63,20 @@
         }
         canvas {
             max-width: 100%;
-            max-height: 65vh;
+            max-height: 60vh;
             border-radius: 4px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .badge {
+            background: #ef4444;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            position: absolute;
+            top: -5px;
+            right: -5px;
         }
     </style>
 </head>
@@ -75,7 +86,7 @@
     <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-950 z-[200] transition-opacity duration-700">
         <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-800 h-14 w-14 mb-4"></div>
         <h2 class="text-xl font-medium tracking-tight">Scanner Pro</h2>
-        <p class="text-gray-500 text-sm mt-2">Iniciando motores de visión...</p>
+        <p class="text-gray-500 text-sm mt-2">Cargando módulos de alta calidad...</p>
     </div>
 
     <!-- Visor de Cámara Principal -->
@@ -93,31 +104,40 @@
         </div>
     </div>
 
-    <!-- Botón de Captura -->
-    <div class="fixed bottom-10 left-0 w-full flex justify-center items-center z-40">
-        <button id="capture-btn" class="capture-btn w-20 h-20 bg-white rounded-full flex items-center justify-center">
-            <div class="w-16 h-16 border-[3px] border-black/5 rounded-full"></div>
-        </button>
+    <!-- Botón de Captura e Indicador -->
+    <div class="fixed bottom-10 left-0 w-full flex flex-col items-center gap-4 z-40">
+        <div class="relative">
+            <button id="capture-btn" class="capture-btn w-20 h-20 bg-white rounded-full flex items-center justify-center">
+                <div class="w-16 h-16 border-[3px] border-black/5 rounded-full"></div>
+            </button>
+            <div id="page-count-badge" class="badge hidden">0</div>
+        </div>
+        <p class="text-[10px] uppercase tracking-[0.2em] text-white/50 font-bold">Capturar página</p>
     </div>
 
     <!-- Vista Previa Post-Procesamiento -->
     <div id="preview-overlay" class="flex flex-col items-center justify-center">
         <div class="w-full max-w-md flex flex-col items-center">
             <header class="text-center mb-6">
-                <h3 class="text-2xl font-bold">Documento Listo</h3>
-                <p class="text-gray-400 text-sm">Perspectiva corregida y filtro aplicado</p>
+                <h3 class="text-2xl font-bold">Vista Previa</h3>
+                <p id="preview-status" class="text-gray-400 text-sm">Página procesada con éxito</p>
             </header>
 
             <div id="canvas-wrapper" class="w-full flex justify-center mb-8 bg-zinc-900 p-2 rounded-lg">
                 <!-- El canvas se inyecta dinámicamente -->
             </div>
 
-            <div class="grid grid-cols-2 gap-4 w-full">
-                <button id="retake-btn" class="py-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl font-semibold transition-colors active:scale-95">
-                    REPETIR
-                </button>
-                <button id="download-btn" class="py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition-colors shadow-lg shadow-blue-900/20 active:scale-95">
-                    GUARDAR PDF
+            <div class="flex flex-col gap-3 w-full px-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="retake-btn" class="py-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl font-semibold transition-colors active:scale-95 text-sm">
+                        REPETIR
+                    </button>
+                    <button id="add-page-btn" class="py-4 bg-green-600 hover:bg-green-500 rounded-2xl font-bold transition-colors active:scale-95 text-sm">
+                        AÑADIR PÁGINA
+                    </button>
+                </div>
+                <button id="finalize-btn" class="py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition-colors shadow-lg active:scale-95 text-base">
+                    FINALIZAR Y GUARDAR PDF
                 </button>
             </div>
         </div>
@@ -136,13 +156,16 @@
         const captureBtn = document.getElementById('capture-btn');
         const previewOverlay = document.getElementById('preview-overlay');
         const retakeBtn = document.getElementById('retake-btn');
-        const downloadBtn = document.getElementById('download-btn');
+        const addPageBtn = document.getElementById('add-page-btn');
+        const finalizeBtn = document.getElementById('finalize-btn');
         const canvasWrapper = document.getElementById('canvas-wrapper');
         const hiddenCanvas = document.getElementById('hidden-canvas');
         const loadingScreen = document.getElementById('loading-screen');
         const toast = document.getElementById('toast');
+        const pageCountBadge = document.getElementById('page-count-badge');
         
         let processedCanvas = null;
+        let capturedPages = []; // Array para almacenar las imágenes de las páginas
 
         // 1. Inicialización de Cámara
         async function initCamera() {
@@ -158,11 +181,11 @@
                 video.srcObject = stream;
             } catch (err) {
                 console.error("Error cámara:", err);
-                alert("No se pudo acceder a la cámara trasera. Por favor verifica los permisos.");
+                alert("No se pudo acceder a la cámara trasera.");
             }
         }
 
-        // 2. OpenCV Listo
+        // 2. OpenCV Ready
         function onOpenCvReady() {
             loadingScreen.style.opacity = '0';
             setTimeout(() => {
@@ -171,16 +194,15 @@
             }, 700);
         }
 
-        // 3. Lógica de Captura y Visión Artificial
+        // 3. Lógica de Captura
         captureBtn.addEventListener('click', () => {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                showToast("Analizando bordes...");
+                showToast("Analizando Documento...");
                 setTimeout(processDocument, 100);
             }
         });
 
         function processDocument() {
-            // Captura frame actual
             const width = video.videoWidth;
             const height = video.videoHeight;
             hiddenCanvas.width = width;
@@ -191,15 +213,19 @@
             let src = cv.imread(hiddenCanvas);
             let dst = new cv.Mat();
             
-            // --- DETECCIÓN DE DOCUMENTO ---
-            // Grayscale + Blur + Canny para bordes
+            // --- MEJORA DE CALIDAD ---
             cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+            // Ecualización para mejorar contraste en zonas oscuras
+            // cv.equalizeHist(dst, dst); // Puede ser muy agresivo, usamos GaussianBlur mejor
             cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-            cv.Canny(dst, dst, 75, 200, 3, false);
+
+            // Detección de bordes
+            let edges = new cv.Mat();
+            cv.Canny(dst, edges, 75, 200, 3, false);
 
             let contours = new cv.MatVector();
             let hierarchy = new cv.Mat();
-            cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
             let maxArea = 0;
             let maxContourIndex = -1;
@@ -210,7 +236,6 @@
                 let approx = new cv.Mat();
                 cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
 
-                // Buscamos un polígono de 4 lados (papel)
                 if (approx.rows == 4 && area > maxArea) {
                     maxArea = area;
                     maxContourIndex = i;
@@ -219,27 +244,26 @@
             }
 
             let finalImg = new cv.Mat();
-
             if (maxContourIndex !== -1 && maxArea > (width * height * 0.05)) {
-                // Caso: Se detectó un papel (mínimo 5% del área)
                 let cnt = contours.get(maxContourIndex);
                 let peri = cv.arcLength(cnt, true);
                 let approx = new cv.Mat();
                 cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-                
                 finalImg = applyPerspectiveCorrection(src, approx);
                 approx.delete();
             } else {
-                // Caso: No se detectó papel claro, usamos la imagen completa
                 finalImg = src.clone();
             }
 
-            // --- FILTRO DE ESCANEO REAL ---
-            // Pasamos a gris y aplicamos un umbral adaptativo para texto nítido
+            // --- PROCESADO DE ALTA CALIDAD ---
+            // Convertimos a gris el resultado final
             cv.cvtColor(finalImg, finalImg, cv.COLOR_RGBA2GRAY, 0);
-            cv.adaptiveThreshold(finalImg, finalImg, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 10);
+            
+            // Ajustamos parámetros para que no parezca fotocopia vieja (más suave)
+            // blockSize: 21 (más grande = más suave), C: 15 (limpieza de fondo)
+            cv.adaptiveThreshold(finalImg, finalImg, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 21, 15);
 
-            // Mostrar resultado en UI
+            // UI Update
             if (processedCanvas) processedCanvas.remove();
             processedCanvas = document.createElement('canvas');
             cv.imshow(processedCanvas, finalImg);
@@ -247,18 +271,15 @@
             
             previewOverlay.style.display = 'flex';
 
-            // Liberar memoria de OpenCV
-            src.delete(); dst.delete(); contours.delete(); hierarchy.delete(); finalImg.delete();
+            // Cleanup
+            src.delete(); dst.delete(); edges.delete(); contours.delete(); hierarchy.delete(); finalImg.delete();
         }
 
-        // Función matemática para corrección de perspectiva
         function applyPerspectiveCorrection(src, pts) {
             let points = [];
             for (let i = 0; i < 4; i++) {
                 points.push({ x: pts.data32S[i * 2], y: pts.data32S[i * 2 + 1] });
             }
-
-            // Ordenar puntos: TL, TR, BR, BL
             points.sort((a, b) => a.y - b.y);
             let topList = points.slice(0, 2).sort((a, b) => a.x - b.x);
             let bottomList = points.slice(2, 4).sort((a, b) => a.x - b.x);
@@ -270,15 +291,8 @@
                 bottomList[0].x, bottomList[0].y
             ]);
 
-            // Calcular dimensiones de salida
-            const w = Math.max(
-                Math.hypot(topList[1].x - topList[0].x, topList[1].y - topList[0].y),
-                Math.hypot(bottomList[1].x - bottomList[0].x, bottomList[1].y - bottomList[0].y)
-            );
-            const h = Math.max(
-                Math.hypot(topList[0].x - bottomList[0].x, topList[0].y - bottomList[0].y),
-                Math.hypot(topList[1].x - bottomList[1].x, topList[1].y - bottomList[1].y)
-            );
+            const w = Math.max(Math.hypot(topList[1].x - topList[0].x, topList[1].y - topList[0].y), Math.hypot(bottomList[1].x - bottomList[0].x, bottomList[1].y - bottomList[0].y));
+            const h = Math.max(Math.hypot(topList[0].x - bottomList[0].x, topList[0].y - bottomList[0].y), Math.hypot(topList[1].x - bottomList[1].x, topList[1].y - bottomList[1].y));
 
             let dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, w, 0, w, h, 0, h]);
             let M = cv.getPerspectiveTransform(srcCoords, dstCoords);
@@ -289,25 +303,78 @@
             return result;
         }
 
-        // 4. Generación de PDF
-        downloadBtn.addEventListener('click', () => {
+        // --- GESTIÓN DE PÁGINAS ---
+
+        addPageBtn.addEventListener('click', () => {
             if (!processedCanvas) return;
-            
-            const { jsPDF } = window.jspdf;
-            const imgData = processedCanvas.toDataURL('image/jpeg', 0.9);
-            
-            // Determinar orientación (Portrait/Landscape) según el canvas procesado
-            const orientation = processedCanvas.width > processedCanvas.height ? 'l' : 'p';
-            const pdf = new jsPDF(orientation, 'px', [processedCanvas.width, processedCanvas.height]);
-            
-            pdf.addImage(imgData, 'JPEG', 0, 0, processedCanvas.width, processedCanvas.height);
-            pdf.save(`scan_${Date.now()}.pdf`);
-            showToast("PDF Guardado ✅");
+            // Guardamos la imagen de la página actual
+            capturedPages.push({
+                data: processedCanvas.toDataURL('image/jpeg', 1.0), // Calidad máxima
+                width: processedCanvas.width,
+                height: processedCanvas.height
+            });
+            updateBadge();
+            previewOverlay.style.display = 'none';
+            showToast("Página añadida ✅");
         });
+
+        finalizeBtn.addEventListener('click', () => {
+            // Si hay una página en el visor que no se ha añadido, preguntamos o la añadimos automáticamente
+            if (processedCanvas && previewOverlay.style.display !== 'none') {
+                capturedPages.push({
+                    data: processedCanvas.toDataURL('image/jpeg', 1.0),
+                    width: processedCanvas.width,
+                    height: processedCanvas.height
+                });
+            }
+
+            if (capturedPages.length === 0) {
+                showToast("No hay páginas para guardar");
+                return;
+            }
+
+            generatePDF();
+        });
+
+        function generatePDF() {
+            showToast("Generando PDF...");
+            const { jsPDF } = window.jspdf;
+            let pdf = null;
+
+            capturedPages.forEach((page, index) => {
+                const orientation = page.width > page.height ? 'l' : 'p';
+                
+                if (index === 0) {
+                    pdf = new jsPDF(orientation, 'px', [page.width, page.height]);
+                } else {
+                    pdf.addPage([page.width, page.height], orientation);
+                }
+                
+                pdf.addImage(page.data, 'JPEG', 0, 0, page.width, page.height);
+            });
+
+            pdf.save(`escaneo_multipagina_${Date.now()}.pdf`);
+            
+            // Reset de la app tras guardar
+            capturedPages = [];
+            updateBadge();
+            previewOverlay.style.display = 'none';
+            showToast("¡PDF Guardado! 📁");
+        }
 
         retakeBtn.addEventListener('click', () => {
             previewOverlay.style.display = 'none';
         });
+
+        function updateBadge() {
+            const count = capturedPages.length;
+            pageCountBadge.innerText = count;
+            if (count > 0) {
+                pageCountBadge.classList.remove('hidden');
+            } else {
+                pageCountBadge.classList.add('hidden');
+            }
+        }
 
         function showToast(msg) {
             toast.innerText = msg;
